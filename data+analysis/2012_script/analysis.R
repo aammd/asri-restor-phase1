@@ -1,10 +1,11 @@
 
+source("secrets.R")
 
-if (0) {
+if (1) {
   # connect to DB
   library(RMySQL)
-  con <- dbConnect(MySQL(), user="cam", password="testtest",
-                   dbname="restor", host="localhost")
+  con <- dbConnect(MySQL(), user="cwebb", password=password,
+                   dbname="restor", host="mysql.phylodiversity.net")
   # dbListTables(con)
   # dbListFields(con, "event")
 
@@ -47,6 +48,8 @@ plot[plot[,"fertilizer"] == "KON","fertilizer"] <- "None"
 plot[plot[,"fertilizer"] == "ORG","fertilizer"] <- "Compost"
 
 }
+
+
 
    # ------------ function, ordered box plot
    ordBP <- function(df, myfactor, title) {
