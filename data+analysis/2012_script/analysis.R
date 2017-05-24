@@ -1,7 +1,7 @@
 
 source("secrets.R")
 
-if (0) {
+if (1) {
   # connect to DB
   library(RMySQL)
   con <- dbConnect(MySQL(), user="cwebb", password=password,
@@ -76,8 +76,8 @@ plot[plot[,"fertilizer"] == "ORG","fertilizer"] <- "Compost"
 
 # Begin output (note - must have echo=F if called from source) 
 sink(file="anal.md", append=F)
-cat("title: ASRI restoration\n")
-cat("css: anal.css\n\n")
+cat("% ASRI restoration\n")
+### cat("css: anal.css\n\n")
 cat("# Analysis of seedling survival and growth in ASRI restoration site\n\n")
 cat("----\n\n")
 sink()
@@ -94,15 +94,29 @@ sink(file="anal.md", append=T)
 cat("## Seedlings planted in", year, ", from month", mon[1],
     "to month", mon[2], "\n\n")
 sink()
-  
-# this will only match sdls with records in both years (all=F)
-a <- merge(all.x = T,
-           meas[ meas$plantYear == year & meas$months == mon[1],  , drop=T],
-           meas[ meas$plantYear == year & meas$months == mon[2],  , drop=T],
+
+### ** beware! This is a multi GB memory hog!  The `drop=T` is not
+###   working now and so there are NAs in the sdlID code which cause
+###   the merge to match millions of NA to millions of NAs. Now using
+###   subset
+    
+###   this will only match sdls with records in both years (all=F)
+
+#    a <- merge(all.x = T,
+#           meas[ meas$plantYear == year & meas$months == mon[1],  , drop=T],
+#           meas[ meas$plantYear == year & meas$months == mon[2],  , drop=T],
+#           by = "sdlID")[ , c("sdlID", "plotCode.x",
+#                              "height.x", "width.x", "dead.x",
+#                              "height.y", "width.y", "dead.y")]     
+
+    a <- merge(all.x = T,
+           subset(meas, plantYear == year & months == mon[1]),
+           subset(meas, plantYear == year & months == mon[2]),
            by = "sdlID")[ , c("sdlID", "plotCode.x",
                               "height.x", "width.x", "dead.x",
-                              "height.y", "width.y", "dead.y")]     
+                              "height.y", "width.y", "dead.y")]  
 
+    
 # prepare
 a$died[a$dead.x == "yes"] <- "died"
 a$died[a$dead.x == "no" & a$dead.y == "yes"] <- "died"
