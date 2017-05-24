@@ -1,7 +1,7 @@
 
 source("secrets.R")
 
-if (1) {
+if (0) {
   # connect to DB
   library(RMySQL)
   con <- dbConnect(MySQL(), user="cwebb", password=password,
@@ -16,12 +16,13 @@ if (1) {
                          FROM  `meas` , plot, sdl, event
                          WHERE meas.sdlID = sdl.id
                          AND sdl.plotID = plot.id
+                         AND sdl.plantYear < 2011
                          AND meas.eventID = event.id")
 
   # head(meas)
 
   # get plot and sdl data
-  plot <- dbGetQuery(con, "SELECT * FROM plot")
+  plot <- dbGetQuery(con, "SELECT * FROM plot WHERE id < 423")
   sdltax <- dbGetQuery(con, "SELECT sdl.id, taxon.code as species, taxon.local
                              FROM sdl, taxon WHERE sdl.taxonID = taxon.id")
   tax <- dbGetQuery(con, "SELECT code, local as localname, gen, sp from taxon
