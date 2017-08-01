@@ -1,0 +1,87 @@
+---
+title: "ASRI restoration"
+author: "Cam Webb and Andrew MacDonald"
+date: "31/7/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+## loading libraries
+library(RMySQL)
+library(knitr)
+```
+
+```{r access_data, cache=TRUE}
+# This Rmarkdown document caches the output download of this code chunk, so it
+# should not need to be run every time the document is compiled.
+
+# On andrew's computer, sensitive info is stored in environment variables.
+user_name <- Sys.getenv("asriusr")
+password <- Sys.getenv("asripwd")
+con <- dbConnect(MySQL(), user=user_name, password=password,
+                 dbname="restor", host="mysql.phylodiversity.net")
+# dbListTables(con)
+# dbListFields(con, "event")
+
+# get meas data
+meas <- dbGetQuery(con, "SELECT plot.plotCode, sdl.tag, sdl.id AS sdlID,
+                         sdl.plantYear,
+                         meas.height, meas.width, meas.dead, event.months
+                         FROM  `meas` , plot, sdl, event
+                         WHERE meas.sdlID = sdl.id
+                         AND sdl.plotID = plot.id
+                         AND sdl.plantYear < 2011
+                         AND meas.eventID = event.id")
+
+# get plot and sdl data
+plot <- dbGetQuery(con, "SELECT * FROM plot WHERE id < 423")
+sdltax <- dbGetQuery(con, "SELECT sdl.id, taxon.code as species, taxon.local
+                             FROM sdl, taxon WHERE sdl.taxonID = taxon.id")
+tax <- dbGetQuery(con, "SELECT code, local as localname, gen, sp from taxon
+                          ORDER BY code")
+
+dbDisconnect(con)
+  
+```
+
+```{r head_measure}
+kable(head(meas))
+kable(head(plot))
+kable(head(sdltax))
+kable(head(tax))
+
+```
+
+
+## data manipulation
+
+```{r}
+# modify treatment codes
+  
+# Add treatment codes, e.g...:
+plot$treatPre[plot$roundup == 0 & plot$cardboard == 0] <- "rc"
+plot$treatPre[plot$roundup == 1 & plot$cardboard == 0] <- "Rc"
+plot$treatPre[plot$roundup == 1 & plot$cardboard == 1] <- "RC"
+plot$treatPre[plot$roundup == 0 & plot$cardboard == 1] <- "rC"
+plot$treatPre <- as.factor(plot$treatPre)
+
+for (i in c("pressing", "roundup", "weeding", "cardboard")) {
+  plot[plot[,i] == 1,i] <- "yes"
+  plot[plot[,i] == 0,i] <- "no"
+}
+
+plot$any.fertilizer[plot$fertilizer =="ORG" | plot$fertilizer =="NPK"] <- "yes"
+plot$any.fertilizer[plot$fertilizer == "KON" | plot$fertilizer == "NONE"] <- "no"
+plot$any.fertilizer <- as.factor(plot$any.fertilizer)
+plot[plot[,"fertilizer"] == "KON","fertilizer"] <- "None"
+plot[plot[,"fertilizer"] == "ORG","fertilizer"] <- "Compost"
+```
+
+```{r}
+summary(plot)
+```
+
