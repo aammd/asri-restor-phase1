@@ -1,10 +1,16 @@
 
+# for cam's life
+user_name <- "cwebb"
 source("secrets.R")
+
+# for Andrew's life
+user_name <- Sys.getenv("asriusr")
+password <- Sys.getenv("asripwd")
 
 if (1) {
   # connect to DB
   library(RMySQL)
-  con <- dbConnect(MySQL(), user="cwebb", password=password,
+  con <- dbConnect(MySQL(), user=user_name, password=password,
                    dbname="restor", host="mysql.phylodiversity.net")
   # dbListTables(con)
   # dbListFields(con, "event")
@@ -19,7 +25,7 @@ if (1) {
                          AND sdl.plantYear < 2011
                          AND meas.eventID = event.id")
 
-  # head(meas)
+  head(meas)
 
   # get plot and sdl data
   plot <- dbGetQuery(con, "SELECT * FROM plot WHERE id < 423")
