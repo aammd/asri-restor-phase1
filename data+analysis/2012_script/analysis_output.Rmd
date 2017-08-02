@@ -2,7 +2,10 @@
 title: "ASRI restoration"
 author: "Cam Webb and Andrew MacDonald"
 date: "31/7/2017"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
@@ -59,21 +62,30 @@ kable(head(tax))
 
 ## data manipulation
 
-```{r}
-# modify treatment codes
-  
-# Add treatment codes, e.g...:
+```{r relevel_factors}
+# modify treatment codes for plotting -- and modelling? 
+
+# change name of the "plot" object, so that changes can be compared
+plot_original <- plot
+# Create one factor for roundup and cardboard combination. represent treatment
+# with a capital letter, and control with lowercase. use R for roundup and C for
+# control
 plot$treatPre[plot$roundup == 0 & plot$cardboard == 0] <- "rc"
 plot$treatPre[plot$roundup == 1 & plot$cardboard == 0] <- "Rc"
 plot$treatPre[plot$roundup == 1 & plot$cardboard == 1] <- "RC"
 plot$treatPre[plot$roundup == 0 & plot$cardboard == 1] <- "rC"
 plot$treatPre <- as.factor(plot$treatPre)
 
+# convert 1 and 0 into "yes" and "no" for four different categorical variables
 for (i in c("pressing", "roundup", "weeding", "cardboard")) {
   plot[plot[,i] == 1,i] <- "yes"
   plot[plot[,i] == 0,i] <- "no"
 }
 
+unique(plot_original$fertilizer)
+# There are five levels to the `fertilizer` factor: "NPK", "KON", "ORG", "NONE",
+# "MULCH", "SEKAM". Two of these levels are synonymous (i think?) "NONE" and
+# "KON" (perhaps for Kontrol).
 plot$any.fertilizer[plot$fertilizer =="ORG" | plot$fertilizer =="NPK"] <- "yes"
 plot$any.fertilizer[plot$fertilizer == "KON" | plot$fertilizer == "NONE"] <- "no"
 plot$any.fertilizer <- as.factor(plot$any.fertilizer)
@@ -81,7 +93,137 @@ plot[plot[,"fertilizer"] == "KON","fertilizer"] <- "None"
 plot[plot[,"fertilizer"] == "ORG","fertilizer"] <- "Compost"
 ```
 
-```{r}
+```{r summary_plot}
 summary(plot)
+```
+
+```{r define_function}
+
+# ------------ function, ordered box plot
+ordBP <- function(df, myfactor, title) {
+  bp <- boxplot(df$htgr ~ df[,myfactor], plot=F)
+  bpord <- order(bp$stats[3,])
+  bp$stats <- bp$stats[,bpord]
+  bp$names <- bp$name[bpord]
+  bp$conf <- bp$conf[,bpord]
+  bp$n <- bp$n[bpord]
+  bxp(bp, outline=F, varwidth=T, notch=T, main=title,
+      ylab="Relative growth rate", las=2)
+}
+#------------------------------------------
+
+# -------------- function, ordered spine plot
+ordSP <- function(df, myfactor, title) {
+  z <- table(as.factor(df[,myfactor]), as.factor(df$died))
+  z <- z[order(z[,2]/z[,1]),]
+  z <- z[,c(2,1)]
+  par(las=2)
+  spineplot(z, main=title, ylab="Survival")
+}
+
+```
+
+## Analysis of seedling survival and growth in ASRI restoration site
+
+```{r responses, cache=TRUE, results="asis"}
+for (year in 2009:2010) {
+#year <- 2009
+
+  if (year == 2009) { mon <- c(0,18) }
+  if (year == 2010) { mon <- c(1,14) }
+  
+  cat("## Seedlings planted in", year, ", from month", mon[1],
+      "to month", mon[2], "\n\n")
+  
+  ### ** beware! This is a multi GB memory hog!  The `drop=T` is not
+  ###   working now and so there are NAs in the sdlID code which cause
+  ###   the merge to match millions of NA to millions of NAs. Now using
+  ###   subset
+  
+  ###   this will only match sdls with records in both years (all=F)
+  
+  #    a <- merge(all.x = T,
+  #           meas[ meas$plantYear == year & meas$months == mon[1],  , drop=T],
+  #           meas[ meas$plantYear == year & meas$months == mon[2],  , drop=T],
+  #           by = "sdlID")[ , c("sdlID", "plotCode.x",
+  #                              "height.x", "width.x", "dead.x",
+  #                              "height.y", "width.y", "dead.y")]     
+  
+  a <- merge(all.x = T,
+             subset(meas, plantYear == year & months == mon[1]),
+             subset(meas, plantYear == year & months == mon[2]),
+             by = "sdlID")[ , c("sdlID", "plotCode.x",
+                                "height.x", "width.x", "dead.x",
+                                "height.y", "width.y", "dead.y")]  
+  
+  
+  # prepare
+  a$died[a$dead.x == "yes"] <- "died"
+  a$died[a$dead.x == "no" & a$dead.y == "yes"] <- "died"
+  a$died[a$dead.x == "no" & is.na(a$dead.y)] <- "died" # not found
+  a$died[a$dead.x == "no" & a$dead.y == "no"] <- "lived"
+  
+  
+  a$died <- as.factor(a$died)
+  a$htgr <- (a$height.y - a$height.x) / a$height.x
+  a$htgr[is.nan(a$htgr)] <- NA
+  a$htgr[is.infinite(a$htgr)] <- NA
+  a <- merge(a, plot, by.x = "plotCode.x", by.y = "plotCode")
+  a <- merge(a, sdltax, by.x = "sdlID", by.y = "id", all.x=T)
+  
+  # Lived and died:
+  cat("### Overall seedling survival\n\n")
+  #print(table(a$died))
+  cat("Survival: **", (length(a$died[a$died=="lived"]) / length(a$died)) * 100,
+      "%** out of **", length(a$died) , "** seedlings\n\n", sep="")
+  
+  # BY FACTOR
+  
+  for (myfactor in  c("species", "pressing", "roundup", "weeding",
+                      "cardboard", "fertilizer", "any.fertilizer","nsdl")) {
+    
+    cat("\n\n### Survival and growth vs", myfactor, "\n\n")
+    
+    # can't use levels, as these seem to be inheritted through the merge
+    if (length(table(a[, myfactor])[table(a[, myfactor])!=0]) == 1) {
+      cat("**Only one level of ", myfactor, "**\n\n", sep="")
+      next
+    }
+    
+    cat("\n#### Survival\n\n")
+    
+    surv_chi <- chisq.test(as.factor(a$died), as.factor(a[,myfactor]))
+    
+    print(kable(broom::tidy(surv_chi)))
+    
+    
+    cat("\n#### Growth\n\n")
+    
+    grow_aov <- anova(lm(a$htgr ~ as.factor(a[,myfactor])))
+    
+    print(kable(broom::tidy(grow_aov)))
+    
+    cat("\n\n")
+    
+    # png(paste(year,"_surv_", myfactor, ".png", sep=""),
+    #     height = 400, width = (400 + length(levels(as.factor(a[,myfactor])))*20))
+    ordSP(a, myfactor, paste("Effect of", myfactor, "on seedling survival,", year,
+                             "plantings"))
+    
+    # png(paste(year,"_RGR_", myfactor, ".png", sep=""),
+    #     height = 400, width = (400 + length(levels(as.factor(a[,myfactor])))*20))
+    ordBP(a, myfactor, paste("Effect of", myfactor, "on seedling growth,", year,
+                             "plantings"))
+  }
+  
+  
+}
+
+```
+
+## Species list
+
+```{r}
+kable(tax)
 ```
 
